@@ -39,7 +39,7 @@
        CSS variables so everything scales together automatically */
     #board-shell {
       background: var(--board-bg);
-      border-radius: 6px;
+      border-radius: 0px;
       box-shadow:
         0 0 0 2px #1e1e1e,
         0 0 0 4px #141414,
@@ -206,8 +206,8 @@ const CONFIG = {
 
   // Layout — fraction of viewport to use (0.0–1.0)
   // Adjust if you want the board smaller/larger inside its container
-  FILL_W: 0.90,   // 90% of viewport width
-  FILL_H: 0.97,   // 97% of viewport height
+  FILL_W: 1.0,    // 100% of viewport width
+  FILL_H: 1.0,    // 100% of viewport height
 };
 
 /* ================================================================
@@ -276,7 +276,7 @@ function sizeBoard() {
   // We'll do a two-pass: first estimate, then measure, then set final.
   const TILE_ASPECT = 1.35;   // height = width * TILE_ASPECT
   const GAP         = 3;      // px gap between tiles (we'll scale this too)
-  const PADDING     = 0.04;   // board padding as fraction of tile size
+  const PADDING     = 0.0;    // board padding as fraction of tile size
 
   // Available width for the grid
   // tile_w * cols + gap * (cols-1) <= vw - 2*padding
@@ -299,7 +299,7 @@ function sizeBoard() {
   const tileW = Math.floor(Math.min(tileFromWidth, tileWFromHeight));
   const tileH = Math.floor(tileW * TILE_ASPECT);
   const gap   = Math.max(2, Math.floor(tileW * 0.10));
-  const pad   = Math.max(6, Math.floor(tileW * 0.4));
+  const pad   = 0;
   const headerFont = Math.max(9, Math.floor(tileW * 0.55));
   const tileFont   = Math.max(7, Math.floor(tileW * 0.62));
 
@@ -311,7 +311,7 @@ function sizeBoard() {
   root.style.setProperty('--header-font-size', headerFont + 'px');
 
   // Set shell padding
-  shell.style.padding = `${pad}px ${pad}px ${Math.floor(pad*0.6)}px`;
+  shell.style.padding = "4px 6px 4px";
 
   // Set grid gap
   const grid = document.getElementById('board-grid');
