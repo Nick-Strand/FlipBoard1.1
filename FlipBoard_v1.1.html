@@ -1,67 +1,546 @@
-Build a responsive web widget that looks like a vintage split-flap airport/train reader board inspired by the attached reference image.
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Choose Your Attitude – Split-Flap Board</title>
+  <style>
+    :root {
+      --board-bg:         #0d0d0d;
+      --tile-bg:          #111111;
+      --tile-border:      #222222;
+      --letter-color:     #f0ece0;
+      --letter-dim:       #2a2a2a;
+      --header-text:      #ffffff;
+      --accent-line:      #c8a84b;
+      --tile-radius:      3px;
+      --font-family:      'Courier New', 'Lucida Console', monospace;
+      --header-font:      'Arial Black', 'Impact', sans-serif;
+    }
 
-Purpose:
-Create an embeddable HTML/CSS/JavaScript widget that can be used inside DAKboard through an iframe or web widget.
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
-Design:
-- Black split-flap board background
-- White/gray monospaced split-flap letters
-- Header/title at the top: “CHOOSE YOUR ATTITUDE”
-- Grid size:
-  - 5 rows high
-  - 30 character spaces wide
-- Each space holds exactly one character
-- Empty spaces should appear as blank black tiles
-- The board should visually feel like a mechanical letter board, with individual square tiles
+    html, body {
+      width: 100%; height: 100%;
+      background: transparent;
+      overflow: hidden;
+    }
 
-Quote behavior:
-- Pull quotes from a Google Sheet
-- Rotate to a new quote every 20–30 seconds
-- Each quote should be formatted across the 5 x 30 grid
-- If a quote is longer than 150 characters, either trim it cleanly or continue to another rotation
-- Center the quote vertically and horizontally when possible
-- Use all caps by default
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
 
-Animation:
-- When switching quotes, each character tile should animate like a split-flap / Rolodex board
-- Letters should rapidly flip through random letters, numbers, and symbols before landing on the correct final character
-- The animation should be slightly staggered across tiles so it feels mechanical
-- Include a subtle flap/flip sound effect during the transition
-- Sound should be optional and controlled by a setting because some browsers block autoplay audio
+    #board-shell {
+      background: var(--board-bg);
+      border-radius: 0px;
+      box-shadow: none;
+      position: relative;
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+    }
 
-Google Sheet integration:
-- Read from a published Google Sheet or Google Sheets API endpoint
-- Sheet columns:
-  - Quote
-  - Author optional
-  - Active optional TRUE/FALSE
-- Only display rows where Active is blank or TRUE
-- If Author exists, display it as “— AUTHOR” when space allows
-- Include easy configuration variables:
-  - GOOGLE_SHEET_URL or SHEET_ID
-  - rotationMinSeconds = 20
-  - rotationMaxSeconds = 30
-  - rows = 5
-  - columns = 30
-  - title = “CHOOSE YOUR ATTITUDE”
-  - soundEnabled = true/false
+    #board-header {
+      text-align: center;
+      font-family: var(--header-font);
+      font-size: var(--header-font-size, 14px);
+      letter-spacing: 0.35em;
+      color: var(--header-text);
+      text-transform: uppercase;
+      width: 100%;
+      user-select: none;
+    }
 
-Deliverables:
-1. A single HTML file version that can be hosted and embedded in DAKboard.
-2. Separate clean files if needed:
-   - index.html
-   - style.css
-   - script.js
-3. Clear instructions for:
-   - How to connect the Google Sheet
-   - How to publish/host the widget
-   - How to embed it into DAKboard with an iframe
-4. Make the widget mobile and display responsive, but preserve the 5 x 30 character grid.
-5. Include fallback sample quotes if the Google Sheet fails to load.
+    #board-header::after {
+      content: '';
+      display: block;
+      margin: 5px auto 0;
+      width: 60%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent-line), transparent);
+    }
 
-Technical notes:
-- Use vanilla HTML, CSS, and JavaScript unless a framework is absolutely necessary.
-- Avoid backend code if possible.
-- Make it lightweight and fast.
-- The iframe should be transparent or have configurable background.
-- Include comments in the code so I can adjust sizing, timing, colors, font, and sound.
+    #board-grid {
+      display: grid;
+    }
+
+    .tile {
+      width:  var(--tile-w, 24px);
+      height: var(--tile-h, 32px);
+      background: var(--tile-bg);
+      border: 1px solid var(--tile-border);
+      border-radius: var(--tile-radius);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-family);
+      font-size: var(--tile-font, 14px);
+      font-weight: bold;
+      color: var(--letter-dim);
+      position: relative;
+      overflow: hidden;
+      cursor: default;
+      user-select: none;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.04),
+        inset 0 -1px 0 rgba(0,0,0,0.4);
+    }
+
+    .tile::after {
+      content: '';
+      position: absolute;
+      left: 0; right: 0; top: 50%;
+      height: 1px;
+      background: rgba(0,0,0,0.65);
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .tile::before {
+      content: '';
+      position: absolute;
+      inset: 0 0 50% 0;
+      background: rgba(255,255,255,0.025);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .tile span {
+      position: relative;
+      z-index: 3;
+      line-height: 1;
+    }
+
+    .tile.active {
+      color: var(--letter-color);
+      text-shadow: 0 0 8px rgba(240,236,224,0.3);
+    }
+
+    .tile.flipping span {
+      animation: flipChar 0.06s linear;
+    }
+
+    @keyframes flipChar {
+      0%  { transform: scaleY(1);  opacity: 1;   }
+      45% { transform: scaleY(0);  opacity: 0.3; }
+      55% { transform: scaleY(0);  opacity: 0.3; }
+      100%{ transform: scaleY(1);  opacity: 1;   }
+    }
+
+    #sound-toggle {
+      position: absolute;
+      top: 8px; right: 10px;
+      background: none;
+      border: 1px solid #2a2a2a;
+      border-radius: 4px;
+      color: #444;
+      font-size: 13px;
+      padding: 2px 5px;
+      cursor: pointer;
+      line-height: 1.4;
+      transition: color 0.2s, border-color 0.2s;
+      z-index: 10;
+    }
+    #sound-toggle:hover  { color: var(--accent-line); border-color: var(--accent-line); }
+    #sound-toggle.muted  { opacity: 0.35; }
+
+    #status-bar {
+      text-align: center;
+      font-family: var(--font-family);
+      font-size: 10px;
+      color: #333;
+      min-height: 12px;
+      letter-spacing: 0.1em;
+    }
+  </style>
+</head>
+<body>
+
+<div id="board-shell">
+  <button id="sound-toggle" title="Toggle flip sound">🔊</button>
+  <div id="board-header">CHOOSE YOUR ATTITUDE</div>
+  <div id="board-grid"></div>
+  <div id="status-bar"></div>
+</div>
+
+<script>
+/* ================================================================
+   CONFIGURATION
+   ================================================================ */
+const CONFIG = {
+  GOOGLE_SHEET_CSV_URL: '',
+  // Paste your published Google Sheet CSV URL here, e.g.:
+  // 'https://docs.google.com/spreadsheets/d/e/YOUR_ID/pub?gid=0&single=true&output=csv'
+
+  ROWS:    5,
+  COLS:    30,
+
+  ROTATION_MIN_SECS: 20,
+  ROTATION_MAX_SECS: 30,
+
+  SHUFFLE: true,
+
+  TITLE: 'CHOOSE YOUR ATTITUDE',
+
+  SOUND_ENABLED: true,
+
+  FLIP_DURATION_MS:   60,
+  FLIP_SCRAMBLE_REPS: 8,
+  STAGGER_MS:         18,
+};
+
+/* ================================================================
+   FALLBACK QUOTES
+   ================================================================ */
+const FALLBACK_QUOTES = [
+  { quote: "THE TRUTH DOESN'T MIND BEING QUESTIONED. BUT A LIE DOES.", author: '' },
+  { quote: 'YOUR ATTITUDE IS THE ONE THING YOU CAN ALWAYS CONTROL.', author: 'NICK STRAND' },
+  { quote: 'EVERY MORNING IS A CHANCE TO CHOOSE AGAIN.', author: '' },
+  { quote: 'RESILIENCE IS NOT ABOUT BOUNCING BACK. IT IS ABOUT MOVING FORWARD.', author: 'NICK STRAND' },
+  { quote: 'THE STAGE YOU BUILD FOR OTHERS IS THE ONE THAT DEFINES YOU.', author: '' },
+  { quote: 'CONSISTENCY IS THE BRIDGE BETWEEN GOALS AND RESULTS.', author: '' },
+  { quote: 'YOUR MINDSET IS YOUR MOST POWERFUL TOOL. SHARPEN IT DAILY.', author: '' },
+  { quote: 'ATTITUDE IS A CHOICE. MAKE IT COUNT.', author: 'NICK STRAND' },
+  { quote: 'HARD DAYS BUILD STRONG PEOPLE. LEAN IN.', author: '' },
+  { quote: 'YOU CANNOT CONTROL THE STORM. BUT YOU CAN DECIDE TO DANCE IN THE RAIN.', author: '' },
+];
+
+const SCRAMBLE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#@$%&*!?+-=<>';
+
+/* ================================================================
+   STATE
+   ================================================================ */
+let quotes       = [];
+let quoteOrder   = [];
+let orderPos     = 0;
+let tiles        = [];
+let soundEnabled  = CONFIG.SOUND_ENABLED;
+let audioCtx      = null;
+let _masterComp   = null;
+let isAnimating   = false;
+
+/* ================================================================
+   BOOT
+   ================================================================ */
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('board-header').textContent = CONFIG.TITLE;
+  sizeBoard();
+  buildGrid();
+  setupSoundToggle();
+  window.addEventListener('resize', sizeBoard);
+  loadQuotes().then(() => {
+    buildOrder();
+    showNextQuote();
+    scheduleNext();
+  });
+});
+
+/* ================================================================
+   SIZING — calculates the largest tile that fits the viewport
+   while keeping the full ROWS x COLS grid visible, then injects
+   all measurements as CSS variables so everything scales together.
+   ================================================================ */
+function sizeBoard() {
+  const ROWS        = CONFIG.ROWS;
+  const COLS        = CONFIG.COLS;
+  const TILE_ASPECT = 1.35;
+  const GAP         = 3;
+
+  // 90% of viewport in each direction gives breathing room on sides
+  const vw = window.innerWidth  * 0.90;
+  const vh = window.innerHeight * 0.97;
+
+  // Solve for tile width from width constraint
+  const tileFromW = (vw - GAP * (COLS - 1)) / COLS;
+
+  // Estimate header + status height relative to tile size, solve from height
+  const tileFromH_raw = (vh - GAP * (ROWS - 1)) / (ROWS * TILE_ASPECT + 1.8);
+  const tileFromH = tileFromH_raw;
+
+  const tileW      = Math.floor(Math.min(tileFromW, tileFromH));
+  const tileH      = Math.floor(tileW * TILE_ASPECT);
+  const gap        = Math.max(2, Math.floor(tileW * 0.08));
+  const headerFont = Math.max(9,  Math.floor(tileW * 0.52));
+  const tileFont   = Math.max(7,  Math.floor(tileW * 0.60));
+
+  const root = document.documentElement;
+  root.style.setProperty('--tile-w',           tileW      + 'px');
+  root.style.setProperty('--tile-h',           tileH      + 'px');
+  root.style.setProperty('--tile-font',        tileFont   + 'px');
+  root.style.setProperty('--header-font-size', headerFont + 'px');
+
+  const shell = document.getElementById('board-shell');
+  shell.style.padding = '6px 8px 6px';
+
+  const grid = document.getElementById('board-grid');
+  if (grid) {
+    grid.style.gap       = gap + 'px';
+    grid.style.marginTop = gap + 'px';
+    grid.style.gridTemplateColumns = `repeat(${COLS}, ${tileW}px)`;
+  }
+}
+
+/* ================================================================
+   GRID BUILDER
+   ================================================================ */
+function buildGrid() {
+  const grid = document.getElementById('board-grid');
+  grid.innerHTML = '';
+  tiles = [];
+  for (let r = 0; r < CONFIG.ROWS; r++) {
+    for (let c = 0; c < CONFIG.COLS; c++) {
+      const tile = document.createElement('div');
+      tile.className = 'tile';
+      const span = document.createElement('span');
+      span.textContent = ' ';
+      tile.appendChild(span);
+      grid.appendChild(tile);
+      tiles.push(tile);
+    }
+  }
+}
+
+/* ================================================================
+   GOOGLE SHEET LOADER
+   ================================================================ */
+async function loadQuotes() {
+  if (!CONFIG.GOOGLE_SHEET_CSV_URL) { quotes = FALLBACK_QUOTES; return; }
+  try {
+    setStatus('LOADING...');
+    const res = await fetch(CONFIG.GOOGLE_SHEET_CSV_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const rows = parseCSV(await res.text()).filter(r => {
+      const a = (r.active || '').trim().toUpperCase();
+      return a === '' || a === 'TRUE' || a === '1';
+    });
+    if (!rows.length) throw new Error('No active quotes');
+    quotes = rows.map(r => ({
+      quote:  (r.quote  || '').trim().toUpperCase(),
+      author: (r.author || '').trim().toUpperCase(),
+    }));
+    setStatus('');
+  } catch (e) {
+    console.warn('Sheet load failed:', e.message);
+    quotes = FALLBACK_QUOTES;
+    setStatus('');
+  }
+}
+
+function parseCSV(text) {
+  const lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+  if (lines.length < 2) return [];
+  const headers = splitLine(lines[0]).map(h => h.trim().toLowerCase());
+  return lines.slice(1).filter(l => l.trim()).map(line => {
+    const vals = splitLine(line);
+    const obj  = {};
+    headers.forEach((h,i) => { obj[h] = (vals[i]||'').replace(/^"|"$/g,''); });
+    return obj;
+  });
+}
+
+function splitLine(line) {
+  const r=[]; let cur='', q=false;
+  for (const ch of line) {
+    if (ch==='"') q=!q;
+    else if (ch===',' && !q) { r.push(cur); cur=''; }
+    else cur+=ch;
+  }
+  return [...r, cur];
+}
+
+/* ================================================================
+   QUOTE ORDER
+   ================================================================ */
+function buildOrder() {
+  quoteOrder = quotes.map((_,i) => i);
+  if (CONFIG.SHUFFLE) shuffle(quoteOrder);
+  orderPos = 0;
+}
+
+function shuffle(a) {
+  for (let i=a.length-1; i>0; i--) {
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+}
+
+function nextIdx() {
+  if (orderPos >= quoteOrder.length) {
+    if (CONFIG.SHUFFLE) shuffle(quoteOrder);
+    orderPos = 0;
+  }
+  return quoteOrder[orderPos++];
+}
+
+/* ================================================================
+   QUOTE FORMATTER
+   ================================================================ */
+function formatQuote(q) {
+  const { COLS, ROWS } = CONFIG;
+  const max = ROWS * COLS;
+  let text = q.quote;
+  if (q.author) {
+    const attr = '  \u2014 ' + q.author;
+    if ((text+attr).length <= max) text += attr;
+  }
+  if (text.length > max) text = text.slice(0, max-1) + '\u2026';
+
+  const words = text.split(' ');
+  const lines = [];
+  let cur = '';
+  for (const w of words) {
+    if (!cur) cur = w;
+    else if ((cur+' '+w).length <= COLS) cur += ' '+w;
+    else { lines.push(cur); cur = w; }
+  }
+  if (cur) lines.push(cur);
+
+  const used = lines.slice(0, ROWS);
+  const vOff = Math.floor((ROWS - used.length) / 2);
+  const grid = Array(ROWS * COLS).fill(' ');
+  used.forEach((line, li) => {
+    const row = vOff + li;
+    const col = Math.floor((COLS - line.length) / 2);
+    for (let ci=0; ci<line.length; ci++) grid[row*COLS+col+ci] = line[ci];
+  });
+  return grid;
+}
+
+/* ================================================================
+   SHOW / ANIMATE
+   ================================================================ */
+function showNextQuote() {
+  if (!quotes.length) return;
+  animateBoard(formatQuote(quotes[nextIdx()]));
+}
+
+function animateBoard(target) {
+  if (isAnimating) return;
+  isAnimating = true;
+  tiles.forEach((tile, i) => {
+    setTimeout(() => {
+      scrambleTile(tile, target[i]||' ', CONFIG.FLIP_SCRAMBLE_REPS, () => {
+        if (i === tiles.length-1) isAnimating = false;
+      });
+    }, i * CONFIG.STAGGER_MS);
+  });
+}
+
+function scrambleTile(tile, final, reps, done) {
+  const span = tile.querySelector('span');
+  let rem = reps;
+  function flip() {
+    if (rem === reps) playFlip();
+    tile.classList.add('flipping');
+    setTimeout(() => {
+      tile.classList.remove('flipping');
+      if (rem > 0) {
+        span.textContent = SCRAMBLE_CHARS[Math.floor(Math.random()*SCRAMBLE_CHARS.length)];
+        tile.classList.add('active');
+        rem--;
+        setTimeout(flip, CONFIG.FLIP_DURATION_MS);
+      } else {
+        span.textContent = final;
+        final.trim() ? tile.classList.add('active') : tile.classList.remove('active');
+        if (done) done();
+      }
+    }, CONFIG.FLIP_DURATION_MS/2);
+  }
+  flip();
+}
+
+function scheduleNext() {
+  const delay = Math.random()*(CONFIG.ROTATION_MAX_SECS-CONFIG.ROTATION_MIN_SECS)*1000
+              + CONFIG.ROTATION_MIN_SECS*1000;
+  setTimeout(() => { showNextQuote(); scheduleNext(); }, delay);
+}
+
+/* ================================================================
+   SOUND
+   ================================================================ */
+function getCtx() {
+  if (!audioCtx) {
+    audioCtx    = new (window.AudioContext||window.webkitAudioContext)();
+    _masterComp = audioCtx.createDynamicsCompressor();
+    _masterComp.threshold.value = -18;
+    _masterComp.knee.value      =   6;
+    _masterComp.ratio.value     =   4;
+    _masterComp.attack.value    =   0.003;
+    _masterComp.release.value   =   0.15;
+    _masterComp.connect(audioCtx.destination);
+  }
+  return audioCtx;
+}
+
+function noiseBuffer(ctx, dur) {
+  const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate*dur), ctx.sampleRate);
+  const d   = buf.getChannelData(0);
+  for (let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  return buf;
+}
+
+function noiseBurst(ctx, t, dur, gain, fLo, fHi) {
+  const src=ctx.createBufferSource(); src.buffer=noiseBuffer(ctx,dur+0.01);
+  const bpf=ctx.createBiquadFilter(); bpf.type='bandpass';
+  bpf.frequency.value=(fLo+fHi)/2; bpf.Q.value=0.8;
+  const g=ctx.createGain();
+  g.gain.setValueAtTime(0,t);
+  g.gain.linearRampToValueAtTime(gain,t+dur*0.1);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  src.connect(bpf); bpf.connect(g); g.connect(_masterComp);
+  src.start(t); src.stop(t+dur+0.01);
+}
+
+function ck(ctx, t, freq, gain, decay) {
+  const osc=ctx.createOscillator(); osc.type='square';
+  osc.frequency.setValueAtTime(freq,t);
+  osc.frequency.exponentialRampToValueAtTime(freq*0.3,t+decay);
+  const g=ctx.createGain();
+  g.gain.setValueAtTime(gain,t);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+decay);
+  osc.connect(g); g.connect(_masterComp);
+  osc.start(t); osc.stop(t+decay+0.005);
+}
+
+let lastSound=0;
+function playFlip() {
+  if (!soundEnabled) return;
+  const now=Date.now(); if (now-lastSound<25) return; lastSound=now;
+  try {
+    const ctx=getCtx(); if (ctx.state==='suspended') ctx.resume();
+    const t0=ctx.currentTime;
+    const roll=(CONFIG.FLIP_SCRAMBLE_REPS*CONFIG.FLIP_DURATION_MS)/1000;
+    const n=Math.max(3,Math.floor(CONFIG.FLIP_SCRAMBLE_REPS*0.7));
+    const step=roll/n;
+    for (let i=0;i<n;i++) noiseBurst(ctx,t0+i*step,step*1.3,0.18+Math.random()*0.1,800+Math.random()*400,2400+Math.random()*800);
+    for (let i=0;i<CONFIG.FLIP_SCRAMBLE_REPS;i++) ck(ctx,t0+(i*CONFIG.FLIP_DURATION_MS)/1000,1200+Math.random()*600,0.12+Math.random()*0.06,0.018);
+    const land=t0+roll;
+    ck(ctx,land,90+Math.random()*40,0.28,0.06);
+    noiseBurst(ctx,land,0.035,0.22,300,1800);
+    ck(ctx,land+0.005,2200+Math.random()*800,0.09,0.012);
+  } catch(e) {}
+}
+
+/* ================================================================
+   SOUND TOGGLE
+   ================================================================ */
+function setupSoundToggle() {
+  const btn = document.getElementById('sound-toggle');
+  if (!soundEnabled) btn.classList.add('muted');
+  btn.addEventListener('click', () => {
+    soundEnabled = !soundEnabled;
+    btn.textContent = soundEnabled ? '🔊' : '🔇';
+    btn.classList.toggle('muted', !soundEnabled);
+    if (soundEnabled) { const c=getCtx(); if(c.state==='suspended') c.resume(); }
+  });
+  document.getElementById('board-shell').addEventListener('click', () => {
+    if (audioCtx && audioCtx.state==='suspended') audioCtx.resume();
+  }, { once: true });
+}
+
+function setStatus(msg) { document.getElementById('status-bar').textContent = msg; }
+</script>
+</body>
+</html>
