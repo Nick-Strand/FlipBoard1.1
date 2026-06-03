@@ -27,28 +27,28 @@
       width: 100%; height: 100%;
       background: transparent;
       overflow: hidden;
+      margin: 0; padding: 0;
     }
 
     body {
       display: flex;
-      align-items: center;
-      justify-content: center;
+      align-items: stretch;
+      justify-content: stretch;
     }
 
-    /* Board fills the viewport; JS calculates exact tile size and injects
-       CSS variables so everything scales together automatically */
+    /* Shell stretches to fill 100% of whatever DAKboard gives us */
     #board-shell {
       background: var(--board-bg);
       border-radius: 0px;
-      box-shadow:
-        0 0 0 2px #1e1e1e,
-        0 0 0 4px #141414,
-        0 8px 40px rgba(0,0,0,0.9),
-        inset 0 1px 0 rgba(255,255,255,0.04);
+      box-shadow: none;
       position: relative;
-      display: inline-flex;
+      display: flex;
       flex-direction: column;
       align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      flex: 1;
     }
 
     #board-header {
@@ -263,64 +263,61 @@ document.addEventListener('DOMContentLoaded', () => {
    ROWS x COLS grid + header, then injects CSS variables.
    ================================================================ */
 function sizeBoard() {
-  const shell      = document.getElementById('board-shell');
-  const header     = document.getElementById('board-header');
-  const statusBar  = document.getElementById('status-bar');
-  const rows       = CONFIG.ROWS;
-  const cols       = CONFIG.COLS;
+  // Use the actual container size (works inside DAKboard iframes too).
+  // The shell is set to width:100% / height:100% in CSS so it always
+  // matches whatever box DAKboard gives us.
+  const shell = document.getElementById('board-shell');
+  const grid  = document.getElementById('board-grid');
+  const rows  = CONFIG.ROWS;
+  const cols  = CONFIG.COLS;
 
-  const vw = window.innerWidth  * CONFIG.FILL_W;
-  const vh = window.innerHeight * CONFIG.FILL_H;
+  // Measure the real available box
+  const vw = shell.clientWidth  || window.innerWidth;
+  const vh = shell.clientHeight || window.innerHeight;
 
-  // Estimate fixed chrome heights (header + status + padding)
-  // We'll do a two-pass: first estimate, then measure, then set final.
-  const TILE_ASPECT = 1.35;   // height = width * TILE_ASPECT
-  const GAP         = 3;      // px gap between tiles (we'll scale this too)
-  const PADDING     = 0.0;    // board padding as fraction of tile size
+  const TILE_ASPECT = 1.35;  // tile height = tile width * TILE_ASPECT
+  const GAP_RATIO   = 0.08;  // gap = tileW * GAP_RATIO
 
-  // Available width for the grid
-  // tile_w * cols + gap * (cols-1) <= vw - 2*padding
-  // Let padding = tile_w * PADDING * 2 (sides)
-  // tile_w * (cols + 2*PADDING) + gap*(cols-1) <= vw
-  // tile_w <= (vw - gap*(cols-1)) / (cols + 2*PADDING)
-  const tileFromWidth  = (vw - GAP * (cols - 1)) / (cols + 2 * PADDING);
+  // We solve for tileW such that the full grid + header fits in both
+  // the width AND height of the container simultaneously.
+  //
+  // Width constraint:
+  //   tileW * cols + gap * (cols-1) = vw
+  //   tileW * cols + tileW * GAP_RATIO * (cols-1) = vw
+  //   tileW * (cols + GAP_RATIO*(cols-1)) = vw
+  const tileFromW = vw / (cols + GAP_RATIO * (cols - 1));
 
-  // Estimate header height as ~1.8x tile width (scales with tile)
-  const estimatedHeaderH = tileFromWidth * 1.8;
-  const estimatedStatusH = 14;
-  const availH = vh - estimatedHeaderH - estimatedStatusH;
+  // Height constraint:
+  //   headerH + gridH = vh
+  //   headerH ~ tileW * 1.6  (scales with tile)
+  //   gridH   = tileH * rows + gap * (rows-1)
+  //           = tileW * TILE_ASPECT * rows + tileW * GAP_RATIO * (rows-1)
+  //           = tileW * (TILE_ASPECT*rows + GAP_RATIO*(rows-1))
+  //   So: tileW * (1.6 + TILE_ASPECT*rows + GAP_RATIO*(rows-1)) = vh
+  const HEADER_RATIO = 1.6;
+  const tileFromH = vh / (HEADER_RATIO + TILE_ASPECT * rows + GAP_RATIO * (rows - 1));
 
-  // tile_h * rows + gap*(rows-1) <= availH
-  // tile_h <= (availH - gap*(rows-1)) / rows
-  const tileHFromHeight = (availH - GAP * (rows - 1)) / rows;
-  const tileWFromHeight = tileHFromHeight / TILE_ASPECT;
+  // Pick whichever is tighter so nothing overflows
+  const tileW      = Math.floor(Math.min(tileFromW, tileFromH));
+  const tileH      = Math.floor(tileW * TILE_ASPECT);
+  const gap        = Math.max(1, Math.floor(tileW * GAP_RATIO));
+  const headerFont = Math.max(8, Math.floor(tileW * 0.52));
+  const tileFont   = Math.max(6, Math.floor(tileW * 0.60));
 
-  // Use whichever constraint is tighter
-  const tileW = Math.floor(Math.min(tileFromWidth, tileWFromHeight));
-  const tileH = Math.floor(tileW * TILE_ASPECT);
-  const gap   = Math.max(2, Math.floor(tileW * 0.10));
-  const pad   = 0;
-  const headerFont = Math.max(9, Math.floor(tileW * 0.55));
-  const tileFont   = Math.max(7, Math.floor(tileW * 0.62));
-
-  // Inject CSS variables onto :root
+  // Push everything through CSS variables — tiles resize automatically
   const root = document.documentElement;
-  root.style.setProperty('--tile-w',           tileW   + 'px');
-  root.style.setProperty('--tile-h',           tileH   + 'px');
-  root.style.setProperty('--tile-font',        tileFont + 'px');
+  root.style.setProperty('--tile-w',           tileW      + 'px');
+  root.style.setProperty('--tile-h',           tileH      + 'px');
+  root.style.setProperty('--tile-font',        tileFont   + 'px');
   root.style.setProperty('--header-font-size', headerFont + 'px');
 
-  // Set shell padding
-  shell.style.padding = "4px 6px 4px";
+  // Minimal shell padding — just enough to not clip tile borders
+  shell.style.padding = '3px';
 
-  // Set grid gap
-  const grid = document.getElementById('board-grid');
   if (grid) {
-    grid.style.gap = gap + 'px';
-    grid.style.marginTop = Math.floor(pad * 0.5) + 'px';
+    grid.style.gap       = gap + 'px';
+    grid.style.marginTop = gap + 'px';
   }
-
-  // If tiles already exist, they'll pick up the new CSS vars automatically
 }
 
 /* ================================================================
