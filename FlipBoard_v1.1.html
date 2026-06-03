@@ -262,8 +262,8 @@ function sizeBoard() {
   const tileW      = Math.floor(Math.min(tileFromW, tileFromH));
   const tileH      = Math.floor(tileW * TILE_ASPECT);
   const gap        = Math.max(2, Math.floor(tileW * 0.08));
-  const headerFont = Math.max(9,  Math.floor(tileW * 0.52));
-  const tileFont   = Math.max(7,  Math.floor(tileW * 0.60));
+  const headerFont = Math.max(9,  Math.floor(tileW * 0.65));
+  const tileFont   = Math.max(7,  Math.floor(tileW * 0.75));
 
   const root = document.documentElement;
   root.style.setProperty('--tile-w',           tileW      + 'px');
