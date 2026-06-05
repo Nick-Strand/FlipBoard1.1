@@ -170,7 +170,7 @@
    CONFIGURATION
    ================================================================ */
 const CONFIG = {
-  GOOGLE_SHEET_CSV_URL: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTArHtQ6-pQ-yEh43Tst16yZajIuPbmTviZy-F7mliOcUTjW7yNOqCQMxT-mn9BzjXSiRvqPXKvicLc/pub?gid=0&single=true&output=csv',
+  GOOGLE_SHEET_CSV_URL: '',
   // Paste your published Google Sheet CSV URL here, e.g.:
   // 'https://docs.google.com/spreadsheets/d/e/YOUR_ID/pub?gid=0&single=true&output=csv'
 
@@ -419,10 +419,21 @@ function showNextQuote() {
 function animateBoard(target) {
   if (isAnimating) return;
   isAnimating = true;
+
+  // Safety net: force isAnimating back to false after the animation
+  // should have completed. Prevents the board from freezing if any
+  // tile callback fails to fire (e.g. at end of quote list).
+  const totalDuration = tiles.length * CONFIG.STAGGER_MS
+    + CONFIG.FLIP_SCRAMBLE_REPS * CONFIG.FLIP_DURATION_MS + 500;
+  const safetyTimer = setTimeout(() => { isAnimating = false; }, totalDuration);
+
   tiles.forEach((tile, i) => {
     setTimeout(() => {
       scrambleTile(tile, target[i]||' ', CONFIG.FLIP_SCRAMBLE_REPS, () => {
-        if (i === tiles.length-1) isAnimating = false;
+        if (i === tiles.length-1) {
+          clearTimeout(safetyTimer);
+          isAnimating = false;
+        }
       });
     }, i * CONFIG.STAGGER_MS);
   });
